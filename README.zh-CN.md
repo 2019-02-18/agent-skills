@@ -4,16 +4,42 @@
 
 ---
 
-## 简介
+## Skills 列表
 
-本仓库提供两个开箱即用的 **Agent Skills**，专为前端开发者设计：
+| Skill | 斜杠命令 | 说明 |
+|---|---|---|
+| [`confirm-requirements`](./skills/confirm-requirements/SKILL.md) | `/confirm-requirements [功能描述]` | 扮演资深产品经理，写代码前先追问需求，输出需求确认文档 + Mermaid 流程图，保存至 `docs/requirements/` |
+| [`gen-test-report`](./skills/gen-test-report/SKILL.md) | `/gen-test-report [可选备注]` | 扫描当前对话，提取变更内容，用大白话生成可直接交付给测试的提测单，保存至 `docs/test-reports/` |
 
-| Skill | 说明 |
-|---|---|
-| [`confirm-requirements`](./skills/confirm-requirements/SKILL.md) | 引导 AI 在写代码前主动追问需求，并将确认结果渲染为可视化的 Mermaid 流程图 |
-| [`gen-test-report`](./skills/gen-test-report/SKILL.md) | 根据功能描述或 diff，自动生成结构化的轻量提测单 |
+---
 
-两个 Skill 均为纯 Markdown 文件，无需插件、无需运行时依赖、无需额外配置。
+## 安装方式
+
+### 通过 npx 安装（推荐）
+
+```bash
+# 安装全部 skills
+npx skills add your-github-name/agent-skills
+
+# 安装单个 skill
+npx skills add your-github-name/agent-skills --skill confirm-requirements
+npx skills add your-github-name/agent-skills --skill gen-test-report
+
+# 安装到指定 agent
+npx skills add your-github-name/agent-skills -a claude-code -a qoder -a codex
+```
+
+### 手动安装
+
+将对应的 skill 文件夹复制到你的 agent skills 目录：
+
+| Agent | 路径 |
+|-------|------|
+| Claude Code | `.claude/skills/` |
+| Qoder | `.qoder/skills/` |
+| Codex | `.agents/skills/` |
+| Cursor | `.agents/skills/` |
+| Windsurf | `.windsurf/skills/` |
 
 ---
 
@@ -33,106 +59,83 @@ agent-skills/
 
 ---
 
-## 快速上手
-
-### 方式一：复制 Skill 文件到项目（推荐）
-
-```bash
-# 克隆仓库
-git clone https://github.com/your-org/agent-skills.git
-
-# 复制所需 Skill
-cp agent-skills/skills/confirm-requirements/SKILL.md ./SKILL.md
-```
-
-然后在 AI 工具的系统提示词或上下文窗口中引用该文件即可。
-
-### 方式二：直接使用原始 URL
-
-将任意 `SKILL.md` 的 Raw URL 粘贴到工具的 **自定义指令 / System Prompt** 输入框：
-
-```
-https://raw.githubusercontent.com/your-org/agent-skills/main/skills/confirm-requirements/SKILL.md
-```
-
-### 方式三：作为斜杠命令使用（Claude Code / Cursor）
-
-在 `.claude/commands/confirm.md` 或 `.cursor/rules` 中添加：
-
-```
-@file:./skills/confirm-requirements/SKILL.md
-```
-
----
-
-## 兼容性
-
-已在以下工具中测试，兼容所有支持 Markdown 系统提示词的工具：
-
-| 分类 | 工具 |
-|---|---|
-| **AI 编码智能体** | Claude Code、Cursor、Copilot Chat、Qoder、Codex、Devin、SWE-agent |
-| **对话 / API** | ChatGPT、Claude.ai、Gemini、Mistral、DeepSeek、Kimi |
-| **IDE 插件** | GitHub Copilot、Cody、Continue、Tabby、Aider |
-| **本地部署** | Ollama + Open-WebUI、LM Studio、Jan |
-
-> **共计支持 40+ 工具** —— 只要你的工具支持系统提示词或自定义指令（Markdown 格式），即可使用。
-
----
-
 ## Skill 详解
 
-### `confirm-requirements` —— 需求确认流程图
+### `confirm-requirements` —— 需求确认 + 流程图
 
-**目的：** 防止因需求不清晰导致的无效返工。在写任何代码之前，Agent 会：
+**触发方式：** `/confirm-requirements [功能描述]`
 
-1. 提出针对性的澄清问题（UI 行为、边界情况、数据流、验收标准）
-2. 将确认后的需求汇总为嵌入在回复中的 **Mermaid 流程图**
-3. 等待明确的确认再继续开发
+**工作流程：**
 
-**输出示例：**
+Agent 扮演资深产品经理和系统分析师角色，在需求未明确之前不会写任何代码：
+
+1. **总结理解** —— 用 2-3 句话复述对需求的理解
+2. **结构化提问** —— 每轮最多 5 个问题，覆盖：
+   - 功能边界（哪些在范围内，哪些明确不做）
+   - 异常与边界条件（网络异常、空数据、并发、权限不足）
+   - 入口与出口（用户从哪里进入，完成后去哪里）
+   - 非功能需求（性能、兼容性、国际化、无障碍）
+   - 外部依赖（对接的 API、第三方服务、数据库表）
+3. **生成需求文档** —— 保存至 `docs/requirements/{功能名称}.md`，包含功能点清单、边界处理表、确认状态
+4. **追加 Mermaid 流程图** —— 同文件末尾，节点数 ≤ 15，`flowchart TD` 格式
+5. **请求最终确认** —— 用户明确确认后才输出 `✅ 需求已确认，可以开始开发`
+
+**流程图示例：**
 
 ```mermaid
 flowchart TD
-    A([开始]) --> B{用户已登录？}
-    B -- 是 --> C[显示 Dashboard]
-    B -- 否 --> D[跳转 /login]
-    C --> E[GET /api/me 获取用户信息]
-    E --> F{返回 200？}
-    F -- 是 --> G[渲染个人资料卡片]
-    F -- 否 --> H[显示错误 Toast]
+    A(开始) --> B{用户是否登录?}
+    B -->|是| C[加载用户数据]
+    B -->|否| D[跳转登录页]
+    C --> E{数据是否完整?}
+    E -->|是| F[显示主页]
+    E -->|否| G[引导补全信息]
+    G --> F
+    D --> H(结束)
+    F --> H
 ```
 
 ---
 
 ### `gen-test-report` —— 轻量提测单生成器
 
-**目的：** 生成结构化的提测单，让 QA 和 Reviewer 可立即执行，涵盖：
+**触发方式：** `/gen-test-report [可选备注]`
 
-- 功能概述与范围
-- 环境与版本信息
-- 测试用例（主流程 + 边界场景）
-- 风险点与回归影响
-- 上线检查清单
+**工作流程：**
 
-**输出示例（节选）：**
+Agent 扮演对接测试的开发人员，从对话中提取变更内容，用测试人员能直接看懂的语言输出提测单：
 
-```
-## 提测单 · 登录功能 v2.3
+1. **回顾对话** —— 找出做了什么功能、涉及哪些页面/模块、有无特殊逻辑或风险点
+2. **转化为操作步骤** —— 格式为"在哪里 → 做什么 → 应该看到什么"，不写技术术语
+3. **输出提测单** —— 保存至 `docs/test-reports/{功能名称}-{YYYYMMDD}.md`，包含：
+   - 基本信息（功能名称、日期、开发人员、分支）
+   - 大白话变更说明
+   - 可执行的测试步骤表
+   - 需要注意的地方（边界场景、已知风险）
+   - `$ARGUMENTS` 中的额外备注
+4. **确认后输出** `✅ 提测单已生成`
 
-| 字段     | 内容                         |
-|----------|------------------------------|
-| 功能     | 手机验证码免密登录           |
-| 分支     | feat/otp-login               |
-| 测试环境 | staging.example.com          |
-| 提测人   | AI Agent                     |
+**设计原则：**
+- 一屏看完，不冗长
+- 测试步骤零技术术语（不写接口路径、不写代码）
+- 对话中没提到的信息标注「待补充」，不编造
 
-### 测试用例
-- [ ] TC-01  输入有效手机号 → 收到验证码 → 登录成功
-- [ ] TC-02  输入无效验证码 → 报错提示，允许重试
-- [ ] TC-03  验证码过期（5 分钟）→ 提示重新发送
-...
-```
+---
+
+## 兼容性
+
+两个 Skill 均在 YAML frontmatter 中设置了 `disable-model-invocation: true`，仅在显式调用斜杠命令时触发，不会在后台静默运行。
+
+兼容所有支持斜杠命令或 Markdown skill 文件的 Agent：
+
+| 分类 | 工具 |
+|---|---|
+| **AI 编码智能体** | Claude Code、Qoder、Codex、Cursor、Devin、SWE-agent |
+| **IDE 插件** | GitHub Copilot Chat、Cody、Continue、Windsurf |
+| **对话 / API** | ChatGPT、Claude.ai、Gemini、DeepSeek、Kimi |
+| **本地部署** | Ollama + Open-WebUI、LM Studio、Jan |
+
+> **共计支持 40+ 工具** —— 只要你的 Agent 支持 Markdown skill 文件或斜杠命令即可使用。
 
 ---
 
@@ -141,7 +144,7 @@ flowchart TD
 欢迎提交 Pull Request！请遵循以下步骤：
 
 1. Fork 本仓库并创建功能分支
-2. 遵循现有 `SKILL.md` 格式规范
+2. 遵循 YAML frontmatter 规范（`name`、`description`、`disable-model-invocation`、`argument-hint`）
 3. 同时提供中英文说明
 4. 提交 PR 并附上清晰的变更摘要
 

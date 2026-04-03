@@ -1,21 +1,47 @@
 # Agent Skills for Frontend Developers
 
-> Practical Agent Skills for Frontend Developers — Requirements Confirmation Flowchart & Lightweight Test Report Generator, compatible with Claude Code / Qoder / Codex / Cursor and 40+ coding tools.
+> Practical Agent Skills for Frontend Developers — Requirements Confirmation & Lightweight Test Report Generator, compatible with Claude Code / Qoder / Codex / Cursor and 40+ coding tools.
 
 [中文文档](./README.zh-CN.md) · [MIT License](./LICENSE)
 
 ---
 
-## Overview
+## Skills
 
-This repository provides two ready-to-use **Agent Skills** designed specifically for frontend developers:
+| Skill | Slash Command | Description |
+|---|---|---|
+| [`confirm-requirements`](./skills/confirm-requirements/SKILL.md) | `/confirm-requirements [功能描述]` | Acts as a senior PM/analyst. Asks structured questions before coding, then outputs a requirements doc + Mermaid flowchart saved to `docs/requirements/`. |
+| [`gen-test-report`](./skills/gen-test-report/SKILL.md) | `/gen-test-report [可选备注]` | Scans the current conversation, extracts what changed and how to test it, then writes a ready-to-hand-off test report to `docs/test-reports/`. |
 
-| Skill | Description |
-|---|---|
-| [`confirm-requirements`](./skills/confirm-requirements/SKILL.md) | Guides the AI to ask clarifying questions before coding, and renders an interactive Mermaid flowchart summarising the confirmed requirements |
-| [`gen-test-report`](./skills/gen-test-report/SKILL.md) | Generates a structured, lightweight pre-release test report (提测单) from a feature description or diff |
+---
 
-Both skills are plain Markdown files — no plugins, no runtime dependencies, no configuration needed.
+## Installation
+
+### Any agent (recommended)
+
+```bash
+# Install all skills
+npx skills add your-github-name/agent-skills
+
+# Install a single skill
+npx skills add your-github-name/agent-skills --skill confirm-requirements
+npx skills add your-github-name/agent-skills --skill gen-test-report
+
+# Install to specific agents
+npx skills add your-github-name/agent-skills -a claude-code -a qoder -a codex
+```
+
+### Manual installation
+
+Copy the skill folder to your agent's skills directory:
+
+| Agent | Path |
+|-------|------|
+| Claude Code | `.claude/skills/` |
+| Qoder | `.qoder/skills/` |
+| Codex | `.agents/skills/` |
+| Cursor | `.agents/skills/` |
+| Windsurf | `.windsurf/skills/` |
 
 ---
 
@@ -35,106 +61,83 @@ agent-skills/
 
 ---
 
-## Quick Start
-
-### 1. Copy the skill into your project (recommended)
-
-```bash
-# Clone the repo
-git clone https://github.com/your-org/agent-skills.git
-
-# Copy the skill(s) you need
-cp agent-skills/skills/confirm-requirements/SKILL.md ./SKILL.md
-```
-
-Then reference it in your AI tool's system prompt or context window.
-
-### 2. Reference directly via URL
-
-Paste the raw URL of any `SKILL.md` into your tool's **Custom Instructions** / **System Prompt** field:
-
-```
-https://raw.githubusercontent.com/your-org/agent-skills/main/skills/confirm-requirements/SKILL.md
-```
-
-### 3. Use as a slash command (Claude Code / Cursor)
-
-Add the following to `.claude/commands/confirm.md` or `.cursor/rules`:
-
-```
-@file:./skills/confirm-requirements/SKILL.md
-```
-
----
-
-## Compatibility
-
-Tested with the following tools (and compatible with any tool that accepts a Markdown system prompt):
-
-| Category | Tools |
-|---|---|
-| **AI Coding Agents** | Claude Code, Cursor, Copilot Chat, Qoder, Codex, Devin, SWE-agent |
-| **Chat / API** | ChatGPT, Claude.ai, Gemini, Mistral, DeepSeek, Kimi |
-| **IDE Extensions** | GitHub Copilot, Cody, Continue, Tabby, Aider |
-| **Self-hosted** | Ollama + Open-WebUI, LM Studio, Jan |
-
-> **Total: 40+ tools supported** — if your tool supports a system prompt or custom instructions in Markdown, it works.
-
----
-
 ## Skill Details
 
-### `confirm-requirements` — Requirements Confirmation Flowchart
+### `confirm-requirements` — Requirements Confirmation + Flowchart
 
-**Purpose:** Prevent wasted effort caused by ambiguous requirements. Before writing a single line of code the agent will:
+**Trigger:** `/confirm-requirements [feature description]`
 
-1. Ask targeted clarifying questions (UI behaviour, edge cases, data flow, acceptance criteria)
-2. Summarise the confirmed requirements as a **Mermaid flowchart** embedded in the response
-3. Await explicit approval before proceeding
+**What it does:**
 
-**Example output:**
+The agent adopts the role of a senior product manager and system analyst. It will not write any code until requirements are locked. The workflow:
+
+1. **Summarise** its understanding of your request in 2–3 sentences
+2. **Ask up to 5 targeted questions** per round, covering:
+   - Functional boundaries (what's in scope / explicitly out)
+   - Edge cases & exceptions (network errors, empty states, concurrency, permissions)
+   - Entry & exit points (where users come from, where they go after)
+   - Non-functional requirements (performance, compatibility, i18n, accessibility)
+   - External dependencies (APIs, third-party services, DB tables)
+3. **Generate a requirements document** saved to `docs/requirements/{feature-name}.md`, including a checklist of feature points, edge-case table, and confirmation status
+4. **Append a Mermaid flowchart** (≤ 15 nodes, `flowchart TD`) to the same file
+5. **Request final sign-off** — only outputs `✅ 需求已确认，可以开始开发` after explicit confirmation
+
+**Example flowchart output:**
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B{User logged in?}
-    B -- Yes --> C[Show Dashboard]
-    B -- No  --> D[Redirect to /login]
-    C --> E[Fetch user data via GET /api/me]
-    E --> F{200 OK?}
-    F -- Yes --> G[Render profile card]
-    F -- No  --> H[Show error toast]
+    A(开始) --> B{用户是否登录?}
+    B -->|是| C[加载用户数据]
+    B -->|否| D[跳转登录页]
+    C --> E{数据是否完整?}
+    E -->|是| F[显示主页]
+    E -->|否| G[引导补全信息]
+    G --> F
+    D --> H(结束)
+    F --> H
 ```
 
 ---
 
 ### `gen-test-report` — Lightweight Test Report Generator
 
-**Purpose:** Produce a structured pre-release test report (提测单) that QA and reviewers can act on immediately, covering:
+**Trigger:** `/gen-test-report [optional notes]`
 
-- Feature summary & scope
-- Environment & version information
-- Test cases (happy path + edge cases)
-- Risk areas & regression points
-- Deploy checklist
+**What it does:**
 
-**Example output (abbreviated):**
+The agent reads the current conversation as a developer handing off to QA — no technical jargon, just clear steps any tester can follow. The workflow:
 
-```
-## 提测单 · Login Feature v2.3
+1. **Scan the conversation** for what was built or changed, which pages/modules are involved, and any special logic or known risks discussed
+2. **Translate changes into plain test steps** in the format: *open X → do Y → expect Z*
+3. **Write a test report** to `docs/test-reports/{feature-name}-{YYYYMMDD}.md`, containing:
+   - Basic info (feature name, date, developer, branch)
+   - Plain-language summary of changes
+   - Step-by-step test table
+   - Things to watch out for (edge cases, known risks)
+   - Extra notes from `$ARGUMENTS`
+4. **Ask for confirmation**, then outputs `✅ 提测单已生成`
 
-| Field        | Value                        |
-|--------------|------------------------------|
-| Feature      | Password-free login via OTP  |
-| Branch       | feat/otp-login               |
-| Test Env     | staging.example.com          |
-| Submitted by | AI Agent                     |
+**Design principles:**
+- One screen long — no bloat
+- Zero tech terms in test steps (no API paths, no code snippets)
+- Missing info is marked `待补充`, never fabricated
 
-### Test Cases
-- [ ] TC-01  Enter valid phone → receive OTP → login success
-- [ ] TC-02  Enter invalid OTP → show error, allow retry
-- [ ] TC-03  OTP expires (5 min) → prompt re-send
-...
-```
+---
+
+## Compatibility
+
+Both skills have a `disable-model-invocation: true` frontmatter flag — they activate only when explicitly called via slash command, never running in the background.
+
+Compatible with any agent that supports slash commands or Markdown skill files:
+
+| Category | Tools |
+|---|---|
+| **AI Coding Agents** | Claude Code, Qoder, Codex, Cursor, Devin, SWE-agent |
+| **IDE Extensions** | GitHub Copilot Chat, Cody, Continue, Windsurf |
+| **Chat / API** | ChatGPT, Claude.ai, Gemini, DeepSeek, Kimi |
+| **Self-hosted** | Ollama + Open-WebUI, LM Studio, Jan |
+
+> **40+ tools supported** — if your agent supports Markdown skill files or slash commands, it works.
 
 ---
 
@@ -143,8 +146,8 @@ flowchart TD
 Pull requests are welcome! Please:
 
 1. Fork the repo and create a feature branch
-2. Follow the existing SKILL.md format
-3. Add both English and Chinese descriptions
+2. Follow the YAML frontmatter convention (`name`, `description`, `disable-model-invocation`, `argument-hint`)
+3. Add both English and Chinese documentation
 4. Open a PR with a clear summary
 
 ---
